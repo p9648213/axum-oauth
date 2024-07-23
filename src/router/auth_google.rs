@@ -14,6 +14,7 @@ use sqlx::SqlitePool;
 
 use crate::{
     constants::{COOKIE_AUTH_CODE_VERIFIER, COOKIE_AUTH_CSRF_STATE},
+    db::{create_user, get_user_by_account_id},
     helpers::app_error::AppError,
     router::GoogleUser,
 };
@@ -151,6 +152,21 @@ pub async fn callback(
         })?;
 
     // Add user session
+    let account_id = google_user.sub.clone();
+    let existing_user = get_user_by_account_id(&pool, account_id.clone()).await?;
+
+    let user = match existing_user {
+        Some(x) => x,
+        None => {
+            create_user(
+                &pool,
+                account_id,
+                google_user.name,
+                Some(google_user.picture),
+            )
+            .await?
+        }
+    };
 
     todo!()
 }

@@ -2,10 +2,9 @@ CREATE TABLE
     user (
         id TEXT PRIMARY KEY NOT NULL,
         account_id TEXT NOT NULL,
-        provider TEXT NOT NULL,
         username TEXT NOT NULL,
         image_url TEXT,
-        UNIQUE(account_id, provider)
+        UNIQUE(account_id)
     );
 
 CREATE TABLE
