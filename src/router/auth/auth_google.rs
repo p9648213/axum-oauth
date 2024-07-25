@@ -13,13 +13,14 @@ use oauth2::{
 use sqlx::SqlitePool;
 
 use crate::{
-    constants::{COOKIE_AUTH_CODE_VERIFIER, COOKIE_AUTH_CSRF_STATE},
-    db::{create_user, get_user_by_account_id},
+    constants::{
+        COOKIE_AUTH_CODE_VERIFIER, COOKIE_AUTH_CSRF_STATE, COOKIE_AUTH_SESSION, SESSION_DURATION,
+    },
+    db::{create_user, create_user_session, get_user_by_account_id},
     helpers::app_error::AppError,
-    router::GoogleUser,
 };
 
-use super::AuthRequest;
+use super::{AuthRequest, GoogleUser};
 
 fn get_oauth_client() -> Result<BasicClient, AppError> {
     let client_id = ClientId::new(std::env::var("GOOGLE_CLIENT_ID").map_err(|_| {
@@ -168,5 +169,32 @@ pub async fn callback(
         }
     };
 
-    todo!()
+    let user_session = create_user_session(&pool, user.id, SESSION_DURATION).await?;
+
+    // Remove code_verifier and csrf_state cookies
+    let mut remove_csrf_cookie = Cookie::new(COOKIE_AUTH_CSRF_STATE, "");
+    remove_csrf_cookie.set_path("/");
+    remove_csrf_cookie.make_removal();
+
+    let mut remove_code_verifier = Cookie::new(COOKIE_AUTH_CODE_VERIFIER, "");
+    remove_code_verifier.set_path("/");
+    remove_code_verifier.make_removal();
+
+    let session_cookie: Cookie = Cookie::build((COOKIE_AUTH_SESSION, user_session.id.to_string()))
+        .same_site(cookie::SameSite::Lax)
+        .http_only(true)
+        .path("/")
+        .max_age(cookie::time::Duration::milliseconds(
+            SESSION_DURATION.as_millis() as i64,
+        ))
+        .into();
+
+    let cookies = CookieJar::new()
+        .add(remove_csrf_cookie)
+        .add(remove_code_verifier)
+        .add(session_cookie);
+
+    let response = (cookies, Redirect::to("http://localhost:3000")).into_response();
+
+    Ok(response)
 }

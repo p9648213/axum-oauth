@@ -1,8 +1,7 @@
-use axum::{http::StatusCode, routing::get, Router};
-use axum_oauth::{helpers::app_error::AppError, router::google_auth_router};
+use axum::http::StatusCode;
+use axum_oauth::{helpers::app_error::AppError, router::create_router};
 use dotenvy::dotenv;
 use sqlx::SqlitePool;
-use tower_http::trace::TraceLayer;
 use tracing::Level;
 
 #[tokio::main]
@@ -25,17 +24,10 @@ async fn main() -> Result<(), AppError> {
             AppError::new(StatusCode::INTERNAL_SERVER_ERROR, "Server error")
         })?;
 
-    let app = Router::new()
-        .route("/", get(ping))
-        .merge(google_auth_router(pool))
-        .layer(TraceLayer::new_for_http());
+    let app = create_router(pool);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:5000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 
     Ok(())
-}
-
-async fn ping() -> &'static str {
-    "pong"
 }

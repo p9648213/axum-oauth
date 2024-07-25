@@ -1,27 +1,28 @@
-use auth_google::{callback, login};
-use axum::{routing::get, Router};
+use auth::google_auth_router;
+use axum::{http::HeaderValue, routing::get, Router};
 use sqlx::{Pool, Sqlite};
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use user::user_router;
 
-pub mod auth_google;
+pub mod auth;
+pub mod user;
 
-#[derive(Debug, serde::Deserialize)]
-pub struct AuthRequest {
-    code: String,
-    state: String,
-}
+pub fn create_router(pool: Pool<Sqlite>) -> Router {
+    let cors = CorsLayer::new()
+        .allow_origin([
+            "http://localhost:3000".parse::<HeaderValue>().unwrap(),
+            "http://localhost:5173".parse::<HeaderValue>().unwrap(),
+        ])
+        .allow_credentials(true);
 
-#[derive(Default, serde::Serialize, serde::Deserialize)]
-pub struct GoogleUser {
-    sub: String,
-    name: String,
-    email: Option<String>,
-    email_verified: Option<bool>,
-    picture: String,
-}
-
-pub fn google_auth_router(pool: Pool<Sqlite>) -> Router {
     Router::new()
-        .route("/api/auth/google/login", get(login))
-        .route("/api/auth/google/callback", get(callback))
-        .with_state(pool)
+        .route("/", get(ping))
+        .merge(google_auth_router(pool.clone()))
+        .merge(user_router(pool.clone()))
+        .layer(TraceLayer::new_for_http())
+        .layer(cors)
+}
+
+async fn ping() -> &'static str {
+    "pong"
 }
